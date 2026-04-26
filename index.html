@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARES ROVER — Subsurface Ice Survey</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,300;0,400;0,600;0,700;0,800;1,400&family=Courier+Prime:wght@400;700&display=swap');
+
+:root {
+  /* Mars surface palette */
+  --rust:        #b94a1a;
+  --rust-deep:   #7a2e08;
+  --rust-bright: #e05a20;
+  --ochre:       #c8813a;
+  --ochre-light: #e8a860;
+  --dust:        #d4a078;
+  --dust-light:  #ecdbc0;
+  --iron:        #8a5030;
+  --regolith:    #1a0c06;
+  --regolith2:   #240f08;
+  --regolith3:   #2e1508;
+  --bedrock:     #100804;
+
+  /* Ice accent — the dramatic contrast */
+  --ice:         #a8d8f0;
+  --ice-bright:  #d0eeff;
+  --ice-glow:    rgba(168,216,240,0.35);
+  --ice-dim:     rgba(168,216,240,0.08);
+
+  /* Text */
+  --text-main:   #e8c8a8;
+  --text-dim:    #7a4828;
+  --text-bright: #f8e8d0;
+
+  /* Borders */
+  --border:      #3a1a08;
+  --border2:     #4a2510;
+
+  --cell-size: 42px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; min-height: 100vh; background: var(--bedrock); overflow-x: hidden; }
+
+/* ═══ MARS SKY / ATMOSPHERE ══════════════════════════════════════════ */
+body {
+  font-family: 'Courier Prime', monospace;
+  color: var(--text-main);
+  position: relative;
+}
+
+/* Dust haze atmosphere */
+.atmos {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(ellipse 120% 40% at 50% 0%, rgba(180,80,20,0.22) 0%, transparent 70%),
+    radial-gradient(ellipse 80% 50% at 20% 100%, rgba(100,30,5,0.3) 0%, transparent 60%),
+    radial-gradient(ellipse 80% 50% at 80% 100%, rgba(100,30,5,0.25) 0%, transparent 60%);
+}
+
+/* Subtle Mars surface texture via noise-like pattern */
+.texture {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0.18;
+  background-image:
+    repeating-radial-gradient(circle at 15% 25%, transparent 0, rgba(180,80,20,0.4) 1px, transparent 2px),
+    repeating-radial-gradient(circle at 70% 60%, transparent 0, rgba(140,60,15,0.3) 1px, transparent 2px),
+    repeating-radial-gradient(circle at 40% 80%, transparent 0, rgba(160,70,18,0.35) 1px, transparent 2px);
+  background-size: 180px 180px, 220px 220px, 150px 150px;
+}
+
+/* Phobos / Deimos — tiny moons in corner */
+.moon {
+  position: fixed; top: 28px; right: 32px;
+  width: 14px; height: 9px;
+  background: radial-gradient(ellipse at 40% 40%, #c8a070, #7a5030);
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(200,160,112,0.3);
+  pointer-events: none; z-index: 1;
+  opacity: 0.7;
+}
+.moon2 {
+  position: fixed; top: 20px; right: 54px;
+  width: 7px; height: 7px;
+  background: radial-gradient(ellipse at 40% 40%, #b09070, #6a4020);
+  border-radius: 50%;
+  opacity: 0.45; pointer-events: none; z-index: 1;
+}
+
+/* ═══ SHELL ══════════════════════════════════════════════════════════ */
+.shell {
+  position: relative; z-index: 1;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 0 14px 60px;
+  display: flex; flex-direction: column; align-items: center; gap: 0;
+}
+
+/* ═══ TOP BAR ════════════════════════════════════════════════════════ */
+.topbar {
+  width: 100%;
+  background: linear-gradient(180deg, rgba(90,25,5,0.95) 0%, rgba(26,12,6,0.98) 100%);
+  border-bottom: 2px solid var(--rust);
+  padding: 18px 20px 14px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Dust storm scan line */
+.topbar::after {
+  content: '';
+  position: absolute; left: 0; right: 0; top: 0; bottom: 0;
+  background: repeating-linear-gradient(
+    180deg,
+    transparent 0px,
+    transparent 3px,
+    rgba(200,80,20,0.025) 3px,
+    rgba(200,80,20,0.025) 4px
+  );
+  pointer-events: none;
+}
+
+.topbar-inner {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+}
+
+.title-block { flex: 1; }
+
+.rover-tag {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 5px;
+  color: var(--rust-bright);
+  text-transform: uppercase;
+  opacity: 0.8;
+  margin-bottom: 2px;
+}
+
+h1 {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(26px, 7vw, 48px);
+  font-weight: 800;
+  letter-spacing: 2px;
+  line-height: 0.95;
+  text-transform: uppercase;
+  color: var(--dust-light);
+  text-shadow: 2px 2px 0 var(--rust-deep), 0 0 30px rgba(200,100,40,0.4);
+}
+
+h1 em {
+  font-style: normal;
+  color: var(--ice-bright);
+  text-shadow: 0 0 20px var(--ice-glow), 0 0 40px rgba(168,216,240,0.2);
+}
+
+.mission-desc {
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-top: 6px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 400;
+}
+
+/* Sol counter top-right */
+.sol-block {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.sol-label {
+  font-size: 8px; letter-spacing: 3px; color: var(--text-dim);
+  text-transform: uppercase; margin-bottom: 2px;
+  font-family: 'Barlow Condensed', sans-serif;
+}
+
+.sol-value {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 32px; font-weight: 700;
+  color: var(--ochre-light);
+  letter-spacing: 1px; line-height: 1;
+}
+
+/* Status strip */
+.status-strip {
+  margin-top: 12px;
+  display: flex; gap: 12px; align-items: center;
+  flex-wrap: wrap;
+}
+
+.stat-chip {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 3px; text-transform: uppercase;
+  padding: 3px 10px;
+  border: 1px solid var(--rust);
+  color: var(--ochre-light);
+  background: rgba(120,40,10,0.3);
+  position: relative; overflow: hidden;
+}
+
+.stat-chip::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px; background: var(--rust-bright);
+}
+
+.stat-chip.ice-chip {
+  border-color: var(--ice);
+  color: var(--ice-bright);
+  background: var(--ice-dim);
+}
+.stat-chip.ice-chip::before { background: var(--ice); }
+
+.stat-chip.good { border-color: #6aaa6a; color: #8acc8a; background: rgba(74,160,74,0.1); }
+.stat-chip.good::before { background: #6aaa6a; }
+
+.stat-chip.bad  { border-color: #cc4a2a; color: #e86a4a; background: rgba(180,50,20,0.15); }
+.stat-chip.bad::before  { background: #cc4a2a; }
+
+/* ═══ INSTRUMENT PANEL ═══════════════════════════════════════════════ */
+.instrument-panel {
+  width: 100%;
+  background: linear-gradient(180deg, rgba(36,15,8,0.99), rgba(22,10,4,0.99));
+  border-bottom: 1px solid var(--border2);
+  padding: 10px 20px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+
+.readout {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+}
+
+.readout-label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 8px; letter-spacing: 3px; font-weight: 600;
+  color: var(--text-dim); text-transform: uppercase;
+}
+
+.readout-value {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 30px; font-weight: 700; line-height: 1; letter-spacing: 2px;
+}
+
+.readout-value.rust  { color: var(--rust-bright); text-shadow: 0 0 10px rgba(224,90,32,0.5); }
+.readout-value.ice   { color: var(--ice-bright);  text-shadow: 0 0 12px var(--ice-glow); }
+.readout-value.ochre { color: var(--ochre-light); }
+.readout-value.green { color: #8acc8a; text-shadow: 0 0 8px rgba(138,204,138,0.4); }
+.readout-value.red   { color: #e86a4a; text-shadow: 0 0 8px rgba(232,106,74,0.5); }
+.readout-value.blink { animation: blink 0.9s step-end infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* Command buttons centre */
+.cmd-group {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+
+#reset-btn {
+  width: 52px; height: 52px;
+  background: linear-gradient(145deg, #3a1808, #200e04);
+  border: 1px solid var(--rust);
+  border-top-color: var(--ochre);
+  color: var(--dust-light);
+  font-size: 22px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.14s;
+  box-shadow: inset 0 1px 0 rgba(200,130,60,0.15), 0 2px 8px rgba(0,0,0,0.5);
+  position: relative; overflow: hidden;
+}
+
+#reset-btn:hover {
+  background: linear-gradient(145deg, #5a2a10, #3a1808);
+  box-shadow: inset 0 1px 0 rgba(200,130,60,0.2), 0 0 16px rgba(224,90,32,0.4);
+  transform: translateY(-1px);
+}
+
+#reset-btn:active { transform: translateY(1px) scale(0.97); }
+
+.diff-row { display: flex; gap: 3px; }
+
+.diff-btn {
+  background: var(--regolith2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 2px;
+  padding: 4px 10px;
+  cursor: pointer; text-transform: uppercase;
+  transition: all 0.12s;
+}
+
+.diff-btn:hover   { border-color: var(--ochre); color: var(--ochre-light); }
+.diff-btn.active  {
+  background: rgba(180,70,20,0.25);
+  border-color: var(--rust-bright);
+  color: var(--ochre-light);
+  box-shadow: 0 0 8px rgba(200,80,30,0.25);
+}
+
+/* ═══ ALERT BANNER ═══════════════════════════════════════════════════ */
+#alert-banner {
+  display: none;
+  width: 100%;
+  padding: 13px 20px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(13px, 3.8vw, 17px);
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-align: center;
+  text-transform: uppercase;
+  animation: dropIn 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+
+@keyframes dropIn {
+  from { opacity:0; transform: scaleY(0.6); }
+  to   { opacity:1; transform: scaleY(1); }
+}
+
+#alert-banner.mission-success {
+  display: block;
+  background: linear-gradient(135deg, rgba(10,40,10,0.95), rgba(15,50,15,0.95));
+  border-top: 2px solid #6aaa6a; border-bottom: 2px solid #6aaa6a;
+  color: #8acc8a;
+  box-shadow: 0 0 40px rgba(100,180,100,0.15);
+}
+
+#alert-banner.mission-failure {
+  display: block;
+  background: linear-gradient(135deg, rgba(40,8,4,0.97), rgba(60,10,4,0.97));
+  border-top: 2px solid #aa4a2a; border-bottom: 2px solid #aa4a2a;
+  color: #e07050;
+  box-shadow: 0 0 40px rgba(180,60,30,0.2);
+}
+
+/* ═══ TERRAIN VIEWPORT ═══════════════════════════════════════════════ */
+.terrain-wrap {
+  width: 100%;
+  background: var(--regolith);
+  border-left: 3px solid var(--rust-deep);
+  border-right: 3px solid var(--rust-deep);
+  border-bottom: 3px solid var(--rust-deep);
+  padding: 14px 14px 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Depth-scan sweep */
+.terrain-wrap::before {
+  content: '';
+  position: absolute; top: 0; left: -80%; width: 40%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(168,216,240,0.04), transparent);
+  animation: depthScan 5s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes depthScan {
+  0%   { left: -40%; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { left: 110%; opacity: 0; }
+}
+
+.terrain-label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 9px; font-weight: 600;
+  letter-spacing: 4px; text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+  display: flex; align-items: center; gap: 10px;
+}
+
+.terrain-label::before {
+  content: '';
+  width: 20px; height: 1px;
+  background: var(--rust);
+}
+
+.terrain-label::after {
+  content: '';
+  flex: 1; height: 1px;
+  background: linear-gradient(90deg, var(--rust-deep), transparent);
+}
+
+#grid {
+  display: grid;
+  gap: 2px;
+}
+
+/* ═══ CELLS ═══════════════════════════════════════════════════════════ */
+.cell {
+  width: var(--cell-size);
+  height: var(--cell-size);
+  /* Undrilled regolith — banded layering like Mars rock strata */
+  background:
+    linear-gradient(160deg,
+      #2e1a0a 0%,
+      #241408 40%,
+      #1e1006 70%,
+      #281408 100%
+    );
+  border: 1px solid #3a1a08;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 16px; font-weight: 700;
+  transition: background 0.1s, transform 0.07s, border-color 0.1s;
+  position: relative;
+  user-select: none; -webkit-user-select: none;
+  overflow: hidden;
+}
+
+/* Regolith dust sheen */
+.cell::after {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 40%;
+  background: linear-gradient(to bottom, rgba(200,130,60,0.07), transparent);
+  pointer-events: none;
+}
+
+.cell:hover:not(.revealed):not(.marked) {
+  background: linear-gradient(160deg, #3e2414, #2e1808, #261408, #321a0c);
+  border-color: var(--ochre);
+  box-shadow: inset 0 0 10px rgba(200,130,60,0.12), 0 0 8px rgba(200,100,40,0.2);
+  transform: scale(1.06);
+  z-index: 3;
+}
+
+.cell:active:not(.revealed):not(.marked) { transform: scale(0.92); }
+
+/* Drilled — exposed bedrock */
+.cell.revealed {
+  background: linear-gradient(160deg, #0e0604, #100804, #0c0502);
+  border-color: #1e0e04;
+  cursor: default;
+}
+
+/* Marked as suspected ice pocket */
+.cell.marked {
+  background: linear-gradient(160deg, #0a1820, #081420, #060e18);
+  border-color: var(--ice);
+  box-shadow: inset 0 0 10px var(--ice-dim), 0 0 6px rgba(168,216,240,0.2);
+}
+
+/* Ice pocket hit — flash-evaporation event */
+.cell.ice-rupture {
+  background: linear-gradient(160deg, #c0e8ff, #80c8f0, #a8d8f0);
+  border-color: #ffffff;
+  box-shadow: 0 0 20px rgba(168,216,240,0.8), inset 0 0 20px rgba(255,255,255,0.3);
+  animation: rupture 0.5s ease-out forwards;
+}
+
+@keyframes rupture {
+  0%   { transform: scale(1); filter: brightness(1); }
+  20%  { transform: scale(1.25); filter: brightness(2.5); }
+  60%  { transform: scale(1.1); filter: brightness(1.5); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+
+/* Ice pockets shown after game-over */
+.cell.ice-show {
+  background: linear-gradient(160deg, #0a1220, #081018, #060c16);
+  border-color: rgba(168,216,240,0.3);
+}
+
+/* Confirmed ice marker (win) */
+.cell.confirmed {
+  border-color: #6aaa6a;
+  box-shadow: 0 0 6px rgba(106,170,106,0.3);
+}
+
+/* Wrong marker (loss) */
+.cell.wrong-mark {
+  background: linear-gradient(160deg, #1a0804, #140604);
+  border-color: #cc4a2a;
+}
+
+/* Proximity number colours — warm Mars tones with ice contrast */
+.n1 { color: #a8d8f0; }   /* ice blue — 1 is nearby but safe */
+.n2 { color: #6ab8d8; }
+.n3 { color: #e8c060; }   /* warm ochre — moderate risk */
+.n4 { color: #e89040; }
+.n5 { color: #e06030; }   /* rust — high risk */
+.n6 { color: #d84820; }
+.n7 { color: #c83010; }
+.n8 { color: #b82000; }
+
+/* ═══ REFERENCE CARD ════════════════════════════════════════════════ */
+.ref-card {
+  width: 100%;
+  background: linear-gradient(180deg, rgba(30,12,4,0.98), rgba(18,8,2,0.98));
+  border: 1px solid var(--border);
+  border-top: none;
+  padding: 10px 16px;
+  display: flex; gap: 0; flex-wrap: wrap;
+}
+
+.ref-item {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 10px; color: var(--text-dim);
+  letter-spacing: 1px; text-transform: uppercase;
+  padding: 5px 14px;
+  border-right: 1px solid var(--border);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 400;
+}
+
+.ref-item:last-child { border-right: none; }
+.ref-item b { color: var(--text-main); font-weight: 600; }
+.ref-icon { font-size: 13px; }
+
+/* ═══ RESPONSIVE ════════════════════════════════════════════════════ */
+@media (max-width: 440px) {
+  :root { --cell-size: 33px; }
+  .cell { font-size: 13px; }
+  #grid { gap: 1px; }
+  .terrain-wrap { padding: 10px 10px 12px; }
+  .instrument-panel { padding: 8px 12px; }
+  .readout-value { font-size: 24px; }
+  #reset-btn { width: 44px; height: 44px; font-size: 18px; }
+  h1 { font-size: clamp(22px, 8vw, 32px); }
+  .ref-card { gap: 0; }
+  .ref-item { padding: 4px 8px; font-size: 9px; }
+}
+</style>
+</head>
+<body>
+
+<div class="atmos"></div>
+<div class="texture"></div>
+<div class="moon"></div>
+<div class="moon2"></div>
+
+<div class="shell">
+
+  <!-- ── TOP BAR ── -->
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="title-block">
+        <div class="rover-tag">◈ ARES ROVER NETWORK · SUBSURFACE SURVEY DIVISION</div>
+        <h1>ICE <em>POCKET</em><br>SURVEY</h1>
+        <div class="mission-desc">Subsurface Hydro-Geological Mapping — Drill Command Interface</div>
+      </div>
+      <div class="sol-block">
+        <div class="sol-label">Mission Sol</div>
+        <div class="sol-value" id="sol-counter">2047</div>
+      </div>
+    </div>
+
+    <div class="status-strip">
+      <div class="stat-chip" id="status-chip">STANDBY</div>
+      <div class="stat-chip ice-chip">CRYOSPHERE SURVEY ACTIVE</div>
+      <div class="stat-chip" id="diff-chip">ZONE ALPHA · 9×9</div>
+    </div>
+  </div>
+
+  <!-- ── INSTRUMENT PANEL ── -->
+  <div class="instrument-panel">
+    <div class="readout">
+      <div class="readout-label">💧 Ice Pockets</div>
+      <div class="readout-value rust" id="ice-count">010</div>
+    </div>
+
+    <div class="cmd-group">
+      <button id="reset-btn" title="Begin New Survey">
+        <span id="rover-icon">🚜</span>
+      </button>
+      <div class="diff-row">
+        <button class="diff-btn active" data-diff="easy">α</button>
+        <button class="diff-btn" data-diff="medium">β</button>
+        <button class="diff-btn" data-diff="hard">γ</button>
+      </div>
+    </div>
+
+    <div class="readout" style="align-items:flex-end;">
+      <div class="readout-label">⏱ Elapsed · Sol</div>
+      <div class="readout-value ochre blink" id="timer-display">000</div>
+    </div>
+  </div>
+
+  <!-- ── ALERT ── -->
+  <div id="alert-banner"></div>
+
+  <!-- ── TERRAIN VIEW ── -->
+  <div class="terrain-wrap">
+    <div class="terrain-label">Orbital Ground-Penetrating Radar · Surface Drill Map</div>
+    <div id="grid"></div>
+  </div>
+
+  <!-- ── REFERENCE ── -->
+  <div class="ref-card">
+    <div class="ref-item"><span class="ref-icon">🔲</span> <b>Left-click</b> — issue drill command</div>
+    <div class="ref-item"><span class="ref-icon">💧</span> <b>Right-click</b> — mark ice suspect</div>
+    <div class="ref-item"><span class="ref-icon">📡</span> <b>Numbers</b> — radar proximity reading</div>
+    <div class="ref-item"><span class="ref-icon">🎯</span> <b>Goal</b> — avoid all ice pockets</div>
+  </div>
+
+</div>
+
+<script>
+// ── CONFIG ─────────────────────────────────────────────────────────────
+const ZONES = {
+  easy:   { rows: 9,  cols: 9,  pockets: 10, label: 'ZONE ALPHA · 9×9' },
+  medium: { rows: 16, cols: 16, pockets: 40, label: 'ZONE BETA · 16×16' },
+  hard:   { rows: 16, cols: 30, pockets: 99, label: 'ZONE GAMMA · 30×16' },
+};
+
+let cfg = { ...ZONES.easy };
+let board=[], revealed=[], marked=[];
+let pocketCount, gameOver, gameWon, firstClick;
+let timerInterval, seconds;
+
+// Elements
+const gridEl       = document.getElementById('grid');
+const iceCountEl   = document.getElementById('ice-count');
+const timerEl      = document.getElementById('timer-display');
+const resetBtn     = document.getElementById('reset-btn');
+const roverIcon    = document.getElementById('rover-icon');
+const alertBanner  = document.getElementById('alert-banner');
+const statusChip   = document.getElementById('status-chip');
+const diffChip     = document.getElementById('diff-chip');
+
+// ── INIT ───────────────────────────────────────────────────────────────
+function initGame() {
+  clearInterval(timerInterval);
+  seconds     = 0;
+  gameOver    = false;
+  gameWon     = false;
+  firstClick  = true;
+  pocketCount = cfg.pockets;
+
+  board    = Array.from({ length: cfg.rows }, () => Array(cfg.cols).fill(0));
+  revealed = Array.from({ length: cfg.rows }, () => Array(cfg.cols).fill(false));
+  marked   = Array.from({ length: cfg.rows }, () => Array(cfg.cols).fill(false));
+
+  iceCountEl.textContent = fmt(pocketCount);
+  iceCountEl.className   = 'readout-value rust';
+  timerEl.textContent    = '000';
+  timerEl.className      = 'readout-value ochre blink';
+  roverIcon.textContent  = '🚜';
+
+  alertBanner.className     = '';
+  alertBanner.style.display = 'none';
+
+  setStatus('SURVEYING', '');
+  diffChip.textContent = cfg.label;
+  renderGrid();
+}
+
+// ── PLACE ICE POCKETS ──────────────────────────────────────────────────
+function placePockets(safeR, safeC) {
+  let placed = 0;
+  while (placed < cfg.pockets) {
+    const r = Math.floor(Math.random() * cfg.rows);
+    const c = Math.floor(Math.random() * cfg.cols);
+    if (board[r][c] === -1) continue;
+    if (Math.abs(r - safeR) <= 1 && Math.abs(c - safeC) <= 1) continue;
+    board[r][c] = -1;
+    placed++;
+  }
+  for (let r = 0; r < cfg.rows; r++)
+    for (let c = 0; c < cfg.cols; c++)
+      if (board[r][c] !== -1) board[r][c] = countAdj(r, c);
+}
+
+function countAdj(r, c) {
+  let n = 0;
+  forAdj(r, c, (nr, nc) => { if (board[nr][nc] === -1) n++; });
+  return n;
+}
+
+function forAdj(r, c, fn) {
+  for (let dr = -1; dr <= 1; dr++)
+    for (let dc = -1; dc <= 1; dc++) {
+      if (!dr && !dc) continue;
+      const nr = r+dr, nc = c+dc;
+      if (nr >= 0 && nr < cfg.rows && nc >= 0 && nc < cfg.cols) fn(nr, nc);
+    }
+}
+
+function fmt(n) { return String(Math.max(0, n)).padStart(3, '0'); }
+
+// ── RENDER GRID ────────────────────────────────────────────────────────
+function renderGrid() {
+  gridEl.style.gridTemplateColumns = `repeat(${cfg.cols}, auto)`;
+  gridEl.innerHTML = '';
+  for (let r = 0; r < cfg.rows; r++) {
+    for (let c = 0; c < cfg.cols; c++) {
+      const el = document.createElement('div');
+      el.className = 'cell';
+      el.dataset.r = r; el.dataset.c = c;
+      el.addEventListener('click', onDrill);
+      el.addEventListener('contextmenu', onMark);
+      el.addEventListener('touchstart', onTouchStart, { passive: true });
+      el.addEventListener('touchend',   onTouchEnd);
+      el.addEventListener('touchmove',  onTouchMove, { passive: true });
+      gridEl.appendChild(el);
+    }
+  }
+}
+
+function refreshCell(r, c) {
+  const el = cellEl(r, c);
+  el.className = 'cell';
+  el.textContent = '';
+
+  if (revealed[r][c]) {
+    el.classList.add('revealed');
+    const v = board[r][c];
+    if (v === -1) {
+      el.textContent = '💧';
+      el.classList.add('ice-rupture');
+    } else if (v > 0) {
+      el.textContent = v;
+      el.classList.add('n' + v);
+    }
+  } else if (marked[r][c]) {
+    el.classList.add('marked');
+    el.textContent = '🔵';
+  }
+}
+
+function cellEl(r, c) { return gridEl.children[r * cfg.cols + c]; }
+
+// ── TOUCH HOLD ─────────────────────────────────────────────────────────
+let touchTimer = null, touchMoved = false;
+
+function onTouchStart() {
+  touchMoved = false;
+  touchTimer = setTimeout(() => {
+    if (!touchMoved) handleMark(+this.dataset.r, +this.dataset.c);
+  }, 500);
+}
+function onTouchEnd()  { clearTimeout(touchTimer); }
+function onTouchMove() { touchMoved = true; clearTimeout(touchTimer); }
+
+// ── CLICK HANDLERS ─────────────────────────────────────────────────────
+function onDrill() {
+  const r = +this.dataset.r, c = +this.dataset.c;
+  if (gameOver || gameWon || marked[r][c] || revealed[r][c]) return;
+  if (firstClick) {
+    firstClick = false;
+    placePockets(r, c);
+    startTimer();
+    setStatus('DRILLING', '');
+  }
+  handleDrill(r, c);
+}
+
+function onMark(e) {
+  e.preventDefault();
+  const r = +this.dataset.r, c = +this.dataset.c;
+  if (gameOver || gameWon || revealed[r][c]) return;
+  handleMark(r, c);
+}
+
+// ── LOGIC ──────────────────────────────────────────────────────────────
+function handleDrill(r, c) {
+  if (revealed[r][c] || marked[r][c]) return;
+  if (board[r][c] === -1) {
+    revealed[r][c] = true;
+    refreshCell(r, c);
+    triggerLoss(r, c);
+    return;
+  }
+  floodReveal(r, c);
+  checkWin();
+}
+
+function floodReveal(r, c) {
+  if (r < 0 || r >= cfg.rows || c < 0 || c >= cfg.cols) return;
+  if (revealed[r][c] || marked[r][c]) return;
+  revealed[r][c] = true;
+  refreshCell(r, c);
+  if (board[r][c] === 0) forAdj(r, c, (nr, nc) => floodReveal(nr, nc));
+}
+
+function handleMark(r, c) {
+  if (revealed[r][c]) return;
+  marked[r][c] = !marked[r][c];
+  pocketCount += marked[r][c] ? -1 : 1;
+  iceCountEl.textContent = fmt(pocketCount);
+  refreshCell(r, c);
+}
+
+function checkWin() {
+  for (let r = 0; r < cfg.rows; r++)
+    for (let c = 0; c < cfg.cols; c++)
+      if (!revealed[r][c] && board[r][c] !== -1) return;
+  triggerWin();
+}
+
+function triggerWin() {
+  gameWon = true;
+  clearInterval(timerInterval);
+  timerEl.classList.remove('blink');
+  roverIcon.textContent = '✅';
+  iceCountEl.textContent = '000';
+  iceCountEl.className = 'readout-value green';
+
+  for (let r = 0; r < cfg.rows; r++)
+    for (let c = 0; c < cfg.cols; c++)
+      if (board[r][c] === -1) {
+        const el = cellEl(r, c);
+        el.className = 'cell marked confirmed';
+        el.textContent = '💧';
+      }
+
+  alertBanner.className = 'mission-success';
+  alertBanner.textContent = `✓ ALL ICE POCKETS AVOIDED — SURVEY COMPLETE — ${seconds}s ELAPSED`;
+  setStatus('COMPLETE', 'good');
+}
+
+function triggerLoss(hitR, hitC) {
+  gameOver = true;
+  clearInterval(timerInterval);
+  timerEl.classList.remove('blink');
+  roverIcon.textContent = '💥';
+  iceCountEl.className = 'readout-value red';
+
+  for (let r = 0; r < cfg.rows; r++) {
+    for (let c = 0; c < cfg.cols; c++) {
+      if (board[r][c] === -1 && !(r === hitR && c === hitC) && !marked[r][c]) {
+        const el = cellEl(r, c);
+        el.className = 'cell ice-show';
+        el.textContent = '💧';
+      }
+      if (marked[r][c] && board[r][c] !== -1) {
+        const el = cellEl(r, c);
+        el.className = 'cell wrong-mark';
+        el.textContent = '✗';
+      }
+    }
+  }
+
+  alertBanner.className = 'mission-failure';
+  alertBanner.textContent = '✗ ICE POCKET RUPTURED — DRILL LOST — MISSION ABORT';
+  setStatus('ABORTED', 'bad');
+}
+
+// ── TIMER ──────────────────────────────────────────────────────────────
+function startTimer() {
+  timerInterval = setInterval(() => {
+    seconds = Math.min(seconds + 1, 999);
+    timerEl.textContent = String(seconds).padStart(3, '0');
+  }, 1000);
+}
+
+// ── STATUS ─────────────────────────────────────────────────────────────
+function setStatus(text, mod) {
+  statusChip.textContent = text;
+  statusChip.className = 'stat-chip' + (mod ? ' ' + mod : '');
+}
+
+// ── CONTROLS ───────────────────────────────────────────────────────────
+resetBtn.addEventListener('click', initGame);
+
+document.querySelectorAll('.diff-btn').forEach(btn => {
+  btn.addEventListener('click', function () {
+    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    cfg = { ...ZONES[this.dataset.diff] };
+    initGame();
+  });
+});
+
+// ── START ──────────────────────────────────────────────────────────────
+initGame();
+</script>
+</body>
+</html>
